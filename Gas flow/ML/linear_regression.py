@@ -10,7 +10,7 @@ from scipy import stats
     # - use_lr(self): (public, line 30) indicates to main program if we can use linear regression or not
     #                 (availability of data).
     # - collect_data(self): (public, line 45) Collects and prepares data for linear regression.
-    # - find_line(self, 85): generates linear regression model, returns coefficients.
+    # - find_line(self): (public, 85): generates linear regression model, returns coefficients.
 
 #---------------------------------------------------------------------------------------------------
 
@@ -47,23 +47,21 @@ class LR_predictor:
     # and returns it by reference.
     def collect_data(self):
         # Define numpy array that will store data from csv files.
-        accumulator = np.array([[], [], [], []])
+        accumulator = np.empty(shape=(1,4))
 
         # Iterate over files in data directory
         for file in os.listdir('ML/data'):
 
-            # receive data from a csv file into a numpy array
+            # receive data from a csv file into a 4-column numpy array
             filename = 'ML/data/' + str(file)
-            newdata = np.genfromtxt(filename, delimiter = ',', skip_header = 1)
+            newdata = np.genfromtxt(filename, delimiter = ',')
 
             # append numpy array to accumulator defined above
-            accumulator = np.concatenate((accumulator, newdata), axis = 1)
+            accumulator = np.concatenate((accumulator, newdata), axis = 0)
 
-        # taking transpose allows us to remove duplicate rows (easier than removing columns)
-        accumulator = accumulator.T
         # remove duplicate rows
         accumulator = np.unique(accumulator, axis = 0)
-        # return accumulator to normal form
+        # now take transpose for next step (i.e. column now become rows: 4xn)
         accumulator = accumulator.T
 
         # note that the P*A*G product is very large so we need to scale it down by dividing by a constant fixed value
@@ -72,7 +70,7 @@ class LR_predictor:
         x_data = np.zeros(len(accumulator[0]))
         # fill up values
         for i in range(0, len(accumulator[0])):
-            x_data[i] = (accumulator[0, i]*accumulator[1, i]*accumulator[2, i])/SCALING_FACTOR
+            x_data[i] = accumulator[0, i]*(accumulator[1, i]/SCALING_FACTOR)*accumulator[2, i]
 
         # initialise numpy array to store values corresponding to P*A*G product
         y_data = np.array(accumulator[3])

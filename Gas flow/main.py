@@ -189,7 +189,8 @@ def main():
         time.sleep(DELAY)
 
     # save numpy array as csv file in Ml/data location
-    np.savetxt("ML/data/labelled_data.csv", MLdata, delimiter = ',', header = "1. actuator position 2. pressure 3. temperature 4. output")
+    MLdata = MLdata.T
+    np.savetxt("ML/data/labelled_data.csv", MLdata, delimiter = ',', header = 'G,P,A,output')
 
     # zero return code indicates successful completion
     return 0
