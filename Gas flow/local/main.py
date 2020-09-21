@@ -1,4 +1,5 @@
 from memory_prediction.memory_predictor import memory_predictor
+from ML.multiple_regression import MR_predictor
 from ML.linear_regression import LR_predictor
 import testing.reading_generator as r_g
 
@@ -26,8 +27,11 @@ import time
 #        - This component is likely to communicate with sensors and other processing devices through other
 #          Python modules.
 #
-#        - If the required output value changes at any time, then for these iterations only we will use ML to get
-#          faster convergence. In all other cases we will use memory prediction.
+#        - If the required output value changes at any time, then for these iterations only we will use linear regression
+#          to get faster convergence. In all other cases we will use memory prediction.
+#
+#        - However, if memory prediction does not generate a result after a set threshold of tries, we use multiple
+#          regression as a last resort.
 
 #------------------------------------------------------------------------------------------------------
 
@@ -45,6 +49,9 @@ def main():
     #define maximum size of above data structure to limit memory usage
     MAX_SIZE = 100
 
+    #define threshold of misses before we need to use multiple regression.
+    MISS_THRESHOLD = 8
+
     # INDEX 0 - absolute position of actuator (gas aperture size) is the first array in cache
     # INDEX 1 - measured fuel gas supply pressure is the second array in cache
     # INDEX 2 - air aperture size is the third array in cache
@@ -57,6 +64,8 @@ def main():
     m_p = memory_predictor()
     # Instantiate object of LR_predictor class (linear regression).
     lr_p = LR_predictor()
+    # Instantiate object of MR_predictor class (multiple regression).
+    mr_p = MR_predictor()
 
     #------------------------------------------------------------------------------------------------
 
@@ -69,6 +78,7 @@ def main():
     # TODO - train ML model(s) if use_ML is true - obtain coefficients m and c
     if use_ML:
         LR_m, LR_c = lr_p.find_line()
+        mr_p.train_and_test()
 
     #----------------------------------------------------------------------------------------------
 
@@ -77,6 +87,9 @@ def main():
 
     # Define variable to hold number of iterations
     iterations = 0
+
+    # Define variable to record number of misses when using memory prediction.
+    misses = 0
 
     # Define variable to hold required output of system. In the loop below, we will also need to record
     # the required output on the previous iteration as we compare the two to determine if we use ML or not.
@@ -88,7 +101,7 @@ def main():
 
     while iterations < count:
 
-        # TODO: Receive Sensor Data
+        # Receive Sensor Data
         sensordata = r_g.return_reading(iterations*DELAY, gas_aperture)
 
         # If the device is off, we do not need to continue with the remaining contents of the loop.
@@ -160,13 +173,23 @@ def main():
         if use_ML and required_output != old_required_output:
             new_aperture = ((required_output - LR_c)*100000)/(LR_m*supply_pressure*air_aperture)
 
-            # round to 2
+            # round to 2 and check that prediction falls in valid range
             if new_aperture >= 0 and new_aperture <= 100:
-                print("ML ADJUSTMENT: " + str(new_aperture - gas_aperture))
+                print("LR ADJUSTMENT: " + str(new_aperture - gas_aperture))
                 gas_aperture = round(new_aperture, 2)
             else:
-                print("ML ADJUSTMENT ABORTED - OUT OF RANGE VALUE")
+                print("LR ADJUSTMENT ABORTED - OUT OF RANGE VALUE")
 
+        # If the miss threshold is breached we use multiple regression as a last resort.
+        elif use_ML and misses >= MISS_THRESHOLD:
+            new_aperture = mr_p.predict(supply_pressure, air_aperture, required_output)
+            misses = 0
+
+            if new_aperture >= 0 and new_aperture <= 100:
+                print("MR ADJUSTMENT: " + str(new_aperture - gas_aperture))
+                gas_aperture = round(new_aperture, 2)
+            else:
+                print("MR ADJUSTMENT ABORTED - OUT OF RANGE VALUE")
 
         # else we use memory prediction.
         else:
@@ -177,7 +200,13 @@ def main():
                         'current_output': current_output
             }
 
-            gas_aperture += m_p.actuator_predict(context, required_output, cache)
+            # if the adjustment is non-zero, then this means it is a miss and we need to update misses.
+            adjustment = m_p.actuator_predict(context, required_output, cache)
+            if adjustment == 0:
+                misses = 0
+            else:
+                misses += 1
+            gas_aperture += adjustment
             #round to two decimal places
             gas_aperture = round(gas_aperture, 2)
 

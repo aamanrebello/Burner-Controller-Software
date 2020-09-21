@@ -170,7 +170,7 @@ class memory_predictor:
         # return adjustment rounded to two decimal places (required return result same in either case)
         adjustment = req_position - gas_aperture
         print("ADJUSTMENT: " + str(adjustment))
-        return round(adjustment, 2)
+        return adjustment
 
 #--------------------------------------------------------------------------------------------------------------------
 

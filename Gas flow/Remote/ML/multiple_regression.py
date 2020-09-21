@@ -77,17 +77,21 @@ class MR_predictor:
 
         # Data scaling of X data.
         x_data = accum_df[['P', 'A', 'output']]
-        print("X DATA: ")
-        print(x_data)
-        print()
+        #------------------------OUTPUT STATEMENTS--------------------#
+        #print("X DATA: ")
+        #print(x_data)
+        #print()
+        #--------------------------------------------------------------#
         scaled_x_data = self.__scale.fit_transform(x_data)
-        print("MEAN")
-        print(self.__scale.mean_)
-        print("VARIANCE")
-        print(self.__scale.var_)
-        print("SCALED DATA")
-        print(scaled_x_data)
-        print()
+        #------------------------OUTPUT STATEMENTS--------------------#
+        #print("MEAN")
+        #print(self.__scale.mean_)
+        #print("VARIANCE")
+        #print(self.__scale.var_)
+        #print("SCALED DATA")
+        #print(scaled_x_data)
+        #print()
+        #--------------------------------------------------------------#
 
         # the y_data dataframe stores data that will need to be predicted.
         y_data = accum_df['# G']
@@ -111,9 +115,11 @@ class MR_predictor:
 
         # Fit training data to multiple regression model.
         self.__regr.fit(train_x, train_y)
-        print("COEFFS:")
-        print(self.__regr.coef_)
-        print()
+        #------------------------OUTPUT STATEMENTS--------------------#
+        #print("COEFFS:")
+        #print(self.__regr.coef_)
+        #print()
+        #-------------------------------------------------------------#
 
         # We can only test the data for correctness if we have enough of it.
         # This is expected to be the case most of the time.
@@ -145,7 +151,9 @@ class MR_predictor:
             scaled_A = (A - self.__scale.mean_[1])/sqrt(self.__scale.var_[1])
             scaled_output = (output - self.__scale.mean_[2])/sqrt(self.__scale.var_[2])
             data = [[scaled_P, scaled_A, scaled_output]]
-            print(data)
-            return self.__regr.predict(data)
+
+            # NOTE: Prediction is a 1 dimensional numpy array.
+            prediction = self.__regr.predict(data)
+            return prediction[0]
         else:
             return None
