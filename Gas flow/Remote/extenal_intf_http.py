@@ -28,6 +28,18 @@ FILEWRITER = csv.writer(DATAFILE)
 FILEWRITER.writerow(["G", "P", "A", "output"])
 
 #-----------------------------------------------------------------------------------------
+# This function is used to find out if it is possible to use ML (based on availability of data)
+@app.route("/check_ML" , methods = ['GET'])
+def check_ML():
+    try:
+        return 204
+    # Account for HTTP Exception
+    except HTTPError as http_err:
+        return "HTTP error", 404
+    except:
+        return "Error", 404
+
+#-----------------------------------------------------------------------------------------
 # This function can be remotely called to train ML models.
 @app.route("/train" , methods = ['GET'])
 def train_models():
@@ -53,9 +65,9 @@ def train_models():
 def predict_MR():
     try:
         # Receive json data.
-        P = int(request.json["supply_pressure"])
-        A = int(request.json["air_aperture"])
-        output = int(request.json["output"])
+        P = float(request.json["supply_pressure"])
+        A = float(request.json["air_aperture"])
+        output = float(request.json["output"])
 
         result = MR_P.predict(P, A, output)
         if result is not None:
@@ -76,10 +88,10 @@ def predict_MR():
 def add_data():
     try:
         # Receive json data.
-        P = int(request.json["supply_pressure"])
-        A = int(request.json["air_aperture"])
-        G = int(request.json["gas_aperture"])
-        output = int(request.json["output"])
+        P = float(request.json["supply_pressure"])
+        A = float(request.json["air_aperture"])
+        G = float(request.json["gas_aperture"])
+        output = float(request.json["output"])
 
         # all the parameters 0 indicates that the data stream has finished and so we close the file.
         if P == 0 and A == 0 and G == 0 and output == 0:
@@ -87,6 +99,8 @@ def add_data():
         # Else write the next row.
         else:
             FILEWRITER.writerow([G, P, A, output])
+        # return code:
+        return 204
 
     # Account for HTTP Exception
     except HTTPError as http_err:
@@ -95,4 +109,9 @@ def add_data():
         return "Error", 404
 
 #-----------------------------------------------------------------------------------------------------------
+# Run the web app to act as the server i.e. external interface
+if __name__ == '__main__':
+    app.run(port ='8000', debug = True)
+
+#--------------------------------------------------------------
 #END#
