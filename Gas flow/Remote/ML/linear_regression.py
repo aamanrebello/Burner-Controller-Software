@@ -59,6 +59,10 @@ class LR_predictor:
             # append numpy array to accumulator defined above
             accumulator = np.concatenate((accumulator, newdata), axis = 0)
 
+        # note that in the beginning we declared accumulator as an empty matrix,
+        # so now there will be an unwanted row of zeroes at the top of our
+        # matrix. We get rid of it here.
+        accumulator = np.delete(accumulator, (0), axis=0)
         # remove duplicate rows
         accumulator = np.unique(accumulator, axis = 0)
         # now take transpose for next step (i.e. column now become rows: 4xn)
