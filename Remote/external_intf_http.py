@@ -87,7 +87,7 @@ def API_initialise():
     try:
         global EX_INF
         EX_INF = external_interface()
-        return "Success", 200
+        return "Initialisation Successful.", 200
     # Account for Exception
     except Exception as e:
         return str(e), 404
@@ -100,7 +100,7 @@ def API_check_ML():
         if EX_INF.EI_check_ML():
             return "ML can be used.", 200
         else:
-            return "ML cannot be used - no data", 404
+            return "ML cannot be used - no data", 501
     # Account for Exception
     except Exception as e:
         return str(e), 404
@@ -111,7 +111,10 @@ def API_check_ML():
 def API_train_ML():
     try:
         response = EX_INF.EI_train_models()
-        # return response as JSON
+        # Check that LR was trained successfully.
+        if response['LR_m'] == 0 and response['LR_m'] == 0:
+            return "LR does not satisfy requirements", 500
+        # if so, return response as JSON
         return jsonify(response), 200
     # Account for Exception
     except Exception as e:
@@ -129,10 +132,10 @@ def API_MR_prediction():
 
         # generate and return result
         result = EX_INF.EI_predict_MR(P, A, output)
-        if result is not None:
-            return str(result), 200
+        if result == 0.0:
+            return "MR Prediction does not satisfy requirements.", 500
         else:
-            return "", 404
+            return str(result), 200
     # Account for Exception
     except Exception as e:
         return str(e), 404

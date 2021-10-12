@@ -1,6 +1,5 @@
 from memory_prediction.memory_predictor import memory_predictor
-from ML.multiple_regression import MR_predictor
-from ML.linear_regression import LR_predictor
+from external_intf_http import external_interface
 import testing.reading_generator as r_g
 
 import numpy as np
@@ -12,20 +11,18 @@ import time
 # labelled data to the ML program.
 #
 # Below there is also a 'search' functionn which is used to ensure that data in the LRU cache is not repeated
-# (before adding data to tne cache, the cache is searched to make sure the data is not already there)
+# (before adding data to the cache, the cache is searched to make sure the data is not already there)
 
 #-----------------------------------------------------------------------------------------------------
 
-# NOTES: - Data is accumulated in a numpy array over the course of looping and is written at the end. This
-#          avoids overhead due to open files, or bad effects of failure to write to file at some point in
-#          the looping.
+# NOTES: - The latest data is sent via HTTPS to the remote server on every iteration.
 #
 #        - If the cache is not at full capacity, new data is appended to it. If it is at full capacity, the least
 #          recently used data is discarded, all elements are shifted one place to the right and the new data is
 #          inserted in the beginning indices.
 #
 #        - This component is likely to communicate with sensors and other processing devices through other
-#          Python modules.
+#          Python modules like external_intf_http.py.
 #
 #        - If the required output value changes at any time, then for these iterations only we will use linear regression
 #          to get faster convergence. In all other cases we will use memory prediction.
@@ -39,11 +36,7 @@ def main():
     # Set number of iterations
     count = 165
 
-    # Initialise numpy array. This array records all the data extracted from the sensors so that it can
-    # be used by the ML modules to make predictions.
-    MLdata = np.array([[], [], [], []])
-
-    # Initialise another numpy array.
+    # Initialise a numpy array to act as memory cache for memory prediction.
     cache = np.array([[], [], [], []])
 
     #define maximum size of above data structure to limit memory usage
@@ -58,27 +51,33 @@ def main():
     # INDEX 3 - corresponding output value is third array in cache
     GAS_APERTURE, PRESSURE, AIR_APERTURE, OUTPUT = 0, 1, 2, 3
 
+    # Define URL of remote server.
+    SERVER_URL = 'http://127.0.0.1:8000'
+
     #------------------------------------------------------------------------------------------------
 
     # Instantiate object of memory_predictor class.
     m_p = memory_predictor()
-    # Instantiate object of LR_predictor class (linear regression).
-    lr_p = LR_predictor()
-    # Instantiate object of MR_predictor class (multiple regression).
-    mr_p = MR_predictor()
+    # Instantiate object of external_interface class (linear regression).
+    e_i = external_interface(SERVER_URL)
+    # Initialise listener class on server by sending signal to do so. It returns true/false based on
+    # whether initialisation was successful.
+    init_server = e_i.initialise()
 
     #------------------------------------------------------------------------------------------------
 
     # The use_lr function indicates if it is possible to use ML, based on availability of data
-    use_ML = lr_p.use_lr()
-    #use_ML = False
+    # Hence if initialisation is successful, use_ML is set to True.
+    use_ML = False
+    if init_server:
+        use_ML = e_i.use_lr()
+
 
     #----------------------------------------------------------------------------------------------
 
-    # TODO - train ML model(s) if use_ML is true - obtain coefficients m and c
+    # Signal remote server to train ML model(s) if use_ML is true - obtain coefficients m and c
     if use_ML:
-        LR_m, LR_c = lr_p.find_line()
-        mr_p.train_and_test()
+        LR_m, LR_c, use_ML = e_i.train_models()
 
     #----------------------------------------------------------------------------------------------
 
@@ -101,6 +100,9 @@ def main():
 
     while iterations < count:
 
+        # We time the loop to make sure that each iteration takes exactly DELAY seconds.
+        start_time = time.time()
+
         # Receive Sensor Data
         sensordata = r_g.return_reading(iterations*DELAY, gas_aperture)
 
@@ -116,7 +118,11 @@ def main():
         air_aperture = sensordata['air_aperture']
         current_output = sensordata['current_output']
 
-        # recieve data into 4x1 numpy array
+        # IMPORTANT: SEND SENSOR DATA TO THE REMOTE SERVER IF LISTENING----------------------------------------------------------------
+        if init_server:
+            e_i.send_readings(G=gas_aperture, P=supply_pressure, A=air_aperture, output=current_output)
+
+        # recieve data into 4x1 numpy array to concatenate to memory_prediction cache.
         newdata = np.array([[gas_aperture], [supply_pressure], [air_aperture], [current_output]])
 
         # we need to record the old value of required output so that we can compare with the new value.
@@ -159,13 +165,6 @@ def main():
         else:
             m_p.shuffle(cache, index)
 
-    #--------------------------------------------------------------------------------------------------------------------------------------------
-
-        # Next we have to update the MLdata with the newly received data (if it is not repeated)
-        if search(MLdata, newdata) == -1:
-            # concatenate MLdata with newdata, row wise - no need to shuffle
-            MLdata = np.concatenate((MLdata, newdata), axis = 1)
-
     #---------------------------------------------------------------------------------------------------------------------------------------------
         # make predictions
         # if ML is available and there is a change in required output, we will use the ML to make a prediction.
@@ -181,8 +180,8 @@ def main():
                 print("LR ADJUSTMENT ABORTED - OUT OF RANGE VALUE")
 
         # If the miss threshold is breached we use multiple regression as a last resort.
-        elif use_ML and misses >= MISS_THRESHOLD:
-            new_aperture = mr_p.predict(supply_pressure, air_aperture, required_output)
+        elif use_ML and init_server and misses >= MISS_THRESHOLD:
+            new_aperture = e_i.predict(supply_pressure, air_aperture, required_output)
             misses = 0
 
             if new_aperture >= 0 and new_aperture <= 100:
@@ -214,12 +213,14 @@ def main():
         # increment count
         iterations += 1
 
-        # programmed DELAY
-        time.sleep(DELAY)
+        # wait until we are DELAY seconds adead of loop start time
+        while time.time() - start_time < DELAY:
+            pass
 
-    # save numpy array as csv file in Ml/data location
-    MLdata = MLdata.T
-    np.savetxt("ML/data/labelled_data.csv", MLdata, delimiter = ',', header = 'G,P,A,output')
+    if init_server:
+        # Signal end of data stream - server will therefore save data in the given filename.
+        FILENAME = 'labelled_data'
+        e_i.end_data(FILENAME)
 
     # zero return code indicates successful completion
     return 0

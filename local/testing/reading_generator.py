@@ -31,7 +31,7 @@ import numpy as np
 def return_reading(time, gas_aperture):
 
     # configurable parameter: model number from test environment
-    MODEL_NUMBER = 5
+    MODEL_NUMBER = 1
 
     # instantiate object of test environment
     t_e = test_environment(MODEL_NUMBER)

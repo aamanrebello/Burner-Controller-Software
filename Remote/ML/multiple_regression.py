@@ -156,4 +156,4 @@ class MR_predictor:
             prediction = self.__regr.predict(data)
             return prediction[0]
         else:
-            return None
+            return 0.0
